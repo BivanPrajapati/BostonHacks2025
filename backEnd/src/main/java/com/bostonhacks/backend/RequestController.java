@@ -25,6 +25,23 @@ public class RequestController {
     return "";
   }
 
+  @PostMapping("/upload-text")
+  public ResponseEntity<Map<String, Object>> uploadText(@RequestParam("file") MultipartFile file) {
+      Map<String, Object> response = new HashMap<>();
+
+      if (file.isEmpty()) {
+          response.put("success", false);
+          response.put("message", "Please select a file to upload.");
+          return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+      }
+
+      String originalFilename = file.getOriginalFilename();
+      if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".txt")) {
+          response.put("success", false);
+          response.put("message", "Only .txt files are allowed.");
+          return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+      }
+
   @PostMapping("/upload-image")
   public String uploadImage(@RequestParam("file") MultipartFile file, RedirectAttributes redirectAttributes) {
 
