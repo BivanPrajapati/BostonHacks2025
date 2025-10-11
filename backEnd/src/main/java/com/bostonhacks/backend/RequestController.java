@@ -49,10 +49,20 @@ public class RequestController {
       response.put("success", true);
       response.put("message", "Uploaded file successfully!");
       return new ResponseEntity<>(response, HttpStatus.OK);
-
   }
 
-      @PostMapping("/upload-image")
+
+    @GetMapping("/text-advice")
+    public String getTextAdvice(@RequestParam("file") String filename) {
+        client.models.generateContent(
+                "gemini-2.5-flash",
+                "Please search this text file and examine if there's any personally identifiable information.",
+                null);
+        return "";
+    }
+
+
+    @PostMapping("/upload-image")
   public String uploadImage(
       @RequestParam("file") MultipartFile file,
       RedirectAttributes redirectAttributes
