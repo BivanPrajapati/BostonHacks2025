@@ -1,5 +1,6 @@
 package com.bostonhacks.backend;
 import com.google.genai.Client;
+import com.google.genai.types.GenerateContentResponse;
 
 import com.bostonhacks.backend.FileService;
 import com.bostonhacks.backend.SensitiveInfoDetector;
@@ -120,12 +121,11 @@ public class RequestController {
   }
 
     @GetMapping("/text-advice")
-    public String getTextAdvice(@RequestParam("file") String filename) {
-        client.models.generateContent(
+    public GenerateContentResponse getTextAdvice(@RequestParam("file") String filename) {
+        return client.models.generateContent(
                 "gemini-2.5-flash",
                 "Please search this text file and examine if there's any personally identifiable information.",
                 null);
-        return "";
     }
 
 
@@ -138,11 +138,10 @@ public class RequestController {
   }
 
   @GetMapping("/image-advice")
-  public String getImageAdvice(@RequestParam("file") String filename) {
-    client.models.generateContent(
+  public GenerateContentResponse getImageAdvice(@RequestParam("file") String filename) {
+    return client.models.generateContent(
         "gemini-2.5-flash",
         "Please search this image and examine if there's any personally identifiable information.",
         null);
-    return "";
   }
 }
