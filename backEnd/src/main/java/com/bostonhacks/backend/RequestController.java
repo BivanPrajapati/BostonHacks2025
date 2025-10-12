@@ -10,8 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.Model;
@@ -28,12 +29,10 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 public class RequestController {
     private final StorageHandler storageHandler;
-    private final SensitiveInfoDetector sensitiveInfoDetector;
+    Logger logger = LoggerFactory.getLogger(RequestController.class);
 
-    public RequestController(StorageHandler storageHandler,
-                             SensitiveInfoDetector sensitiveInfoDetector) {
+    public RequestController(StorageHandler storageHandler) {
         this.storageHandler = storageHandler;
-        this.sensitiveInfoDetector = sensitiveInfoDetector;
     }
 
     private String analyzeTextWithGemini(String content) {
@@ -145,7 +144,7 @@ public class RequestController {
         try {
             // 3. Store the file to a temporary location on the server
             // This is necessary because SensitiveInfoDetector works with a Path
-            Path storedFilePath = storageHandler.storeFile(file);
+            Path storedFilePath = storageHandler.storeFile(file, logger);
 
             // Populate the response map with file metadata
             response.put("success", true); // The upload itself was successful

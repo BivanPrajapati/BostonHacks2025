@@ -7,11 +7,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class StorageHandler {
+
     private static StorageHandler instance;
     private final Path storageDirectory;
 
@@ -39,11 +41,13 @@ public class StorageHandler {
      * @return The Path to the saved file.
      * @throws IOException If there's an error during file storage.
      */
-    public Path storeFile(MultipartFile file) throws IOException {
+    public Path storeFile(MultipartFile file, Logger logger) throws IOException {
         String cleanedFilename = sanitizeFilename(file.getOriginalFilename());
 
         Path targetLocation = this.storageDirectory.resolve(cleanedFilename);
         Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+        logger.info("File uploaded successfully: {}", targetLocation.toAbsolutePath());
 
         return targetLocation;
     }
@@ -81,10 +85,12 @@ public class StorageHandler {
         return sanitized + "_" + UUID.randomUUID() + fileExtension;
     }
 
-    public Path storeFile(String filename, byte[] content) throws IOException {
+    public Path storeFile(String filename, byte[] content, Logger logger) throws IOException {
         String cleanedFilename = sanitizeFilename(filename);
         Path filePath = storageDirectory.resolve(cleanedFilename);
         Files.write(filePath, content);
+        logger.info("File uploaded successfully: {}", filePath.toAbsolutePath());
+
         return filePath;
     }
 
