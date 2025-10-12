@@ -1,25 +1,25 @@
 package com.bostonhacks.backend;
 
+import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentResponse;
-
-import java.io.File;
+import com.google.genai.types.Part;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.*;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 
 @RestController
@@ -27,9 +27,26 @@ public class RequestController {
     private final StorageHandler storageHandler;
     private final SensitiveInfoDetector sensitiveInfoDetector;
 
-    public RequestController(StorageHandler storageHandler, SensitiveInfoDetector sensitiveInfoDetector) {
+    public RequestController(StorageHandler storageHandler,
+                             SensitiveInfoDetector sensitiveInfoDetector) {
         this.storageHandler = storageHandler;
         this.sensitiveInfoDetector = sensitiveInfoDetector;
+    }
+
+    private String analyzeTextWithGemini(String content) {
+        try {
+            String prompt =
+                "Please analyze this text and check for personally identifiable information (PII)";
+            Content[] contentArr =
+                {Content.fromParts(Part.fromBytes(content.getBytes(), "text/markdown")),
+                    Content.fromParts(Part.fromText(prompt))};
+            var response =
+                Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
+                    Arrays.asList(contentArr), null);
+            return response.toString();
+        } catch (Exception e) {
+            return "Error analyzing text: " + e.getMessage();
+        }
     }
 
     /**
@@ -46,11 +63,8 @@ public class RequestController {
             Files.writeString(tempFile, input, StandardCharsets.UTF_8);
             System.out.println("File created: " + tempFile.toAbsolutePath());
 
-            // Step 2: Call Gemini to analyze the text file
-            String advice = getTextAdvice((MultipartFile) tempFile);
-
-            // Step 3: Return Gemini’s text output
-            return advice;
+            // Step 2: Analyze the text directly
+            return analyzeTextWithGemini(input);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -67,68 +81,12 @@ public class RequestController {
     @GetMapping("/text-advice")
     public String getTextAdvice(@RequestParam("file") MultipartFile filename) {
         try {
-            String API_KEY = "YOUR_GEMINI_API_KEY";
-            String UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files?key=" + API_KEY;
-            String GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + API_KEY;
+            // 1. Read the file contents as text
+            Path filePath = Paths.get("uploads", filename);
+            String fileContent = Files.readString(filePath);
 
-            RestTemplate restTemplate = new RestTemplate();
-
-            // 1️⃣ Upload the file
-            HttpHeaders uploadHeaders = new HttpHeaders();
-            uploadHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-            ByteArrayResource fileResource = new ByteArrayResource(filename.getBytes()) {
-                @Override
-                public String getFilename() {
-                    return filename.getOriginalFilename();
-                }
-            };
-            LinkedMultiValueMap<String, Object> uploadBody = new LinkedMultiValueMap<>();
-            uploadBody.add("file", fileResource);
-
-            HttpEntity<LinkedMultiValueMap<String, Object>> uploadRequest =
-                    new HttpEntity<>(uploadBody, uploadHeaders);
-
-            Map<?, ?> uploadResponse = restTemplate.postForObject(UPLOAD_URL, uploadRequest, Map.class);
-            Map<?, ?> fileData = (Map<?, ?>) uploadResponse.get("file");
-            String fileUri = (String) fileData.get("name"); // e.g., "files/abc123"
-
-            // 2️⃣ Send the file URI to Gemini
-            Map<String, Object> generateBody = Map.of(
-                    "contents", List.of(
-                            Map.of(
-                                    "role", "user",
-                                    "parts", List.of(
-                                            Map.of("file_data", Map.of(
-                                                    "file_uri", fileUri,
-                                                    "mime_type", Objects.requireNonNull(filename.getContentType())
-                                            )),
-                                            Map.of("text", "Please analyze this document and check for personally identifiable information (PII).")
-                                    )
-                            )
-                    )
-            );
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> generateRequest =
-                    new HttpEntity<>(generateBody, headers);
-
-            Map<?, ?> generateResponse =
-                    restTemplate.postForObject(GENERATE_URL, generateRequest, Map.class);
-
-            // 3️⃣ Extract Gemini’s text response
-            List<?> candidates = (List<?>) generateResponse.get("candidates");
-            if (candidates != null && !candidates.isEmpty()) {
-                Map<?, ?> content = (Map<?, ?>) ((Map<?, ?>) candidates.get(0)).get("content");
-                List<?> parts = (List<?>) content.get("parts");
-                if (parts != null && !parts.isEmpty()) {
-                    return (String) ((Map<?, ?>) parts.get(0)).get("text");
-                }
-            }
-
-            return "No response text found.";
+            // 2. Analyze the file content
+            return analyzeTextWithGemini(fileContent);
 
         } catch (IOException e) {
             return "Error reading file: " + e.getMessage();
@@ -226,13 +184,6 @@ public class RequestController {
         }
     }
 
-
-    @PostMapping("/upload-image")
-    public String uploadImage(@RequestParam("file") MultipartFile file,
-                              RedirectAttributes redirectAttributes) {
-        return "";
-    }
-
     @GetMapping("/image-advice")
     public GenerateContentResponse getImageAdvice(@RequestParam("file") String filename) {
         // fixme return str
@@ -240,4 +191,4 @@ public class RequestController {
             "Please search this image and examine if there's any personally identifiable information.",
             null);
     }
-    }
+}
