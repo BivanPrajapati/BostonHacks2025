@@ -4,6 +4,52 @@ function URLfy(path) {
     return URL + path;
 }
 
+function displayFormattedResponse(message) {
+    const responsePanel = document.getElementById('response-panel');
+
+    responsePanel.innerHTML = '';
+
+    const container = document.createElement('div');
+    container.className = 'analysis-result';
+
+    const header = document.createElement('div');
+    header.className = 'analysis-header';
+    header.innerHTML = '<h3>Analysis Results:</h3>';
+
+    const content = document.createElement('div');
+    content.className = 'analysis-content';
+
+    const formattedText = message
+        .split('\n\n')
+        .map(paragraph => {
+            if (paragraph.trim().startsWith('**') && paragraph.trim().endsWith('**')) {
+                return `<h4>${paragraph.replace(/\*\*/g, '')}</h4>`;
+            }
+
+            if (paragraph.includes('•') || paragraph.includes('-')) {
+                const items = paragraph.split('\n')
+                    .filter(item => item.trim())
+                    .map(item => `<li>${item.replace(/^[•\-]\s*/, '')}</li>`)
+                    .join('');
+                return `<ul>${items}</ul>`;
+            }
+
+            let formatted = paragraph
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>');
+
+            return `<p>${formatted}</p>`;
+        })
+        .join('');
+
+    content.innerHTML = formattedText;
+
+    container.appendChild(header);
+    container.appendChild(content);
+    responsePanel.appendChild(container);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const fileUploadForm = document.getElementById('fileUploadForm');
     const fileInput = document.getElementById('fileInput');
@@ -125,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             statusMessage.textContent = 'Error: Invalid response format from advice service.';
             return;
         }
-        responsePanel.textContent = adviceResult.message;
+        displayFormattedResponse(adviceResult.message);
     });
 
     textUploadForm.addEventListener('submit', async (event) => {
@@ -158,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 textStatusMessage.textContent = 'Submission successful!';
-                responsePanel.textContent = result.message;
+                displayFormattedResponse(result.message);
                 textUploadForm.reset();
             } else {
                 const errorText = await response.text();

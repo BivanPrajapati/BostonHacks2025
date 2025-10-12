@@ -140,3 +140,69 @@ button {
     margin-top: 10px;
     font-weight: bold;
 }
+
+.analysis-result {
+    text-align: left;
+    background-color: light-dark(#ffffff, #2a2a2a);
+    border: 1px solid light-dark(#e0e0e0, #404040);
+    border-radius: 8px;
+    padding: 20px;
+    margin: 10px 0;
+    box-shadow: 0 2px 4px light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.05));
+}
+
+.analysis-header {
+    border-bottom: 1px solid light-dark(#e0e0e0, #404040);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.analysis-header h3 {
+    color: light-dark(#333, #f0f0f0);
+    font-size: 1.2em;
+    margin: 0;
+}
+
+.analysis-content h4 {
+    color: light-dark(#555, #ccc);
+    font-size: 1.1em;
+    margin: 15px 0 8px 0;
+    padding: 5px 0;
+    border-bottom: 1px solid light-dark(#f0f0f0, #333);
+}
+
+.analysis-content p {
+    margin: 10px 0;
+    line-height: 1.6;
+    color: light-dark(#666, #ddd);
+}
+
+.analysis-content ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.analysis-content li {
+    margin: 5px 0;
+    color: light-dark(#666, #ddd);
+    line-height: 1.5;
+}
+
+.analysis-content strong {
+    color: light-dark(#333, #fff);
+    font-weight: 600;
+}
+
+.analysis-content em {
+    color: light-dark(#555, #bbb);
+    font-style: italic;
+}
+
+.analysis-content code {
+    background-color: light-dark(#f8f8f8, #3a3a3a);
+    color: light-dark(#d73a49, #ff7b72);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9em;
+}
