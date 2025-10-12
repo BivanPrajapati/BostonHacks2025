@@ -83,7 +83,6 @@ public class RequestController {
                     return filename.getOriginalFilename();
                 }
             };
-
             LinkedMultiValueMap<String, Object> uploadBody = new LinkedMultiValueMap<>();
             uploadBody.add("file", fileResource);
 
