@@ -18,11 +18,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @RestController
 public class RequestController {
-    private final FileService fileService;
+    private final StorageHandler storageHandler;
     private final SensitiveInfoDetector sensitiveInfoDetector;
 
-    public RequestController(FileService fileService, SensitiveInfoDetector sensitiveInfoDetector) {
-        this.fileService = fileService;
+    public RequestController(StorageHandler storageHandler, SensitiveInfoDetector sensitiveInfoDetector) {
+        this.storageHandler = storageHandler;
         this.sensitiveInfoDetector = sensitiveInfoDetector;
     }
 
@@ -48,13 +48,15 @@ public class RequestController {
     @GetMapping("/text-advice")
     public String getTextAdvice(@RequestParam("file") String filename) {
         // fixme return str
-        return Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
+        return Gemini.getInstance().getGemini().models.generateContent(
+            "gemini-2.5-flash",
             "Please search this text file and examine if there's any personally identifiable information.",
-            null);
+            null
+        );
     }
 
-    @PostMapping("/upload-text")
-    public ResponseEntity<Map<String, Object>> uploadText(
+    @PostMapping("/upload-file")
+    public ResponseEntity<Map<String, Object>> uploadFile(
         @RequestParam("file") MultipartFile file) {
         Map<String, Object> response = new HashMap<>();
         if (file.isEmpty()) {
@@ -64,18 +66,19 @@ public class RequestController {
         }
 
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".txt")) {
+        if (originalFilename == null) {
             response.put("success", false);
-            response.put("message", "Only .txt files are allowed.");
+            response.put("message", "Invalid file name.");
             return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
         }
+
         try {
             // 3. Store the file to a temporary location on the server
             // This is necessary because SensitiveInfoDetector works with a Path
-            Path storedFilePath = fileService.storeFile(file);
+            Path storedFilePath = storageHandler.storeFile(file);
 
             // 4. Read the content from the stored file for processing and preview
-            String fileContent = fileService.readFileContent(storedFilePath);
+            String fileContent = storageHandler.readFileContent(storedFilePath);
 
             // 5. Detect Sensitive Information using the dedicated service
             List<String> sensitiveInfoDetections =
