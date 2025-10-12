@@ -115,6 +115,7 @@ public class RequestController {
     @GetMapping("/file-advice")
     public ResponseEntity<Map<String, Serializable>> getFileAdvice(
         @RequestParam("filename") String filename) {
+        int code = 0;
         try {
             Path filePath = storageHandler.fetchFile(filename);
             String mimeType = storageHandler.mimeType(filePath);
@@ -162,6 +163,7 @@ public class RequestController {
 
                     logger.info("Analyzed image file with OCR: {}", filename);
                 } else {
+                    code = 1;
                     analysisResult = analyzeImageWithGemini(filePath);
                     logger.info("Analyzed image file directly: {}", filename);
                 }
@@ -173,7 +175,7 @@ public class RequestController {
             }
 
             return new ResponseEntity<>(
-                Map.of("code", 0, "message", analysisResult),
+                Map.of("code", code, "message", analysisResult),
                 HttpStatus.OK);
 
         } catch (IOException e) {
