@@ -56,7 +56,7 @@ public class RequestController {
      * @return text advice
      */
     @GetMapping("/text")
-    public String getText(@RequestBody String input) {
+    public String getTextAdvice(@RequestBody String input) {
         try {
             // Step 1: Save input string as a temporary .txt file
             Path tempFile = storageHandler.storeFile(input, input.getBytes());
@@ -79,7 +79,7 @@ public class RequestController {
      * @return text advice
      */
     @GetMapping("/text-advice")
-    public String getTextAdvice(@RequestParam("file") MultipartFile filename) {
+    public String getTextFile(@RequestParam("file") String filename) {
         try {
             // 1. Read the file contents as text
             Path filePath = Paths.get("uploads", filename);
