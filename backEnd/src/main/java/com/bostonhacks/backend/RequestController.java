@@ -16,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,10 +29,12 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 public class RequestController {
     private final StorageHandler storageHandler;
+    private final OCRService ocrService;
     Logger logger = LoggerFactory.getLogger(RequestController.class);
 
-    public RequestController(StorageHandler storageHandler) {
+    public RequestController(StorageHandler storageHandler, OCRService ocrService) {
         this.storageHandler = storageHandler;
+        this.ocrService = ocrService;
     }
 
     private String analyzeTextWithGemini(String content) {
@@ -98,16 +99,6 @@ public class RequestController {
         @RequestParam("filename") String filename) {
         try {
             Path filePath = storageHandler.fetchFile(filename);
-            String mimeType = storageHandler.mimeType(file);
-            if(mimeType.contains("image")){
-                OCRService ocrService = new OCRService();
-                String fileName = ocrService.extractTextFromImage(StorageHandler.getInstance().fetchFile(filename).toFile());
-                file = storageHandler.fetchFile(fileName);
-                return new ResponseEntity<>(
-                    Map.of("code", -1, "message", "Error: File not found - " + filename),
-                    HttpStatus.BAD_REQUEST);
-            }
-
             String mimeType = storageHandler.mimeType(filePath);
             String analysisResult;
 
@@ -116,8 +107,15 @@ public class RequestController {
                 analysisResult = analyzeTextWithGemini(fileContent);
                 logger.info("Analyzed text file: {}", filename);
             } else if (mimeType.contains("image")) {
-                analysisResult = analyzeImageWithGemini(filePath);
-                logger.info("Analyzed image file: {}", filename);
+                // Use OCR to extract text from image, then analyze the text
+                String extractedText = ocrService.extractTextFromImage(filePath.toFile());
+                if (extractedText != null && !extractedText.trim().isEmpty()) {
+                    analysisResult = analyzeTextWithGemini(extractedText);
+                    logger.info("Analyzed image file with OCR: {}", filename);
+                } else {
+                    analysisResult = analyzeImageWithGemini(filePath);
+                    logger.info("Analyzed image file directly: {}", filename);
+                }
             } else {
                 logger.error("Unsupported file type: {} for file: {}", mimeType, filename);
                 return new ResponseEntity<>(
@@ -135,8 +133,10 @@ public class RequestController {
                 Map.of("code", -1, "message", "Error: Unable to read file - " + e.getMessage()),
                 HttpStatus.BAD_REQUEST);
         } catch (TesseractException e) {
-            throw new RuntimeException(e);
-        }
+            logger.error("OCR processing failed for file: {}", filename, e);
+            return new ResponseEntity<>(
+                Map.of("code", -1, "message", "Error: OCR processing failed - " + e.getMessage()),
+                HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
             logger.error("Error analyzing file: {}", filename, e);
             return new ResponseEntity<>(
@@ -163,7 +163,7 @@ public class RequestController {
     }
      */
     @PostMapping("/upload-file")
-    public ResponseEntity<Map<String, Object>> uploadFile(Model model, @RequestParam("file")
+    public ResponseEntity<Map<String, Object>> uploadFile(@RequestParam("file")
     MultipartFile file) {
         Map<String, Object> response = new HashMap<>();
         if (file.isEmpty()) {
@@ -195,9 +195,7 @@ public class RequestController {
 
         } catch (IOException e) {
             // Handle file I/O errors during storage or reading
-            System.err.println(
-                "Error processing file upload for '" + originalFilename + "': " + e.getMessage());
-            e.printStackTrace(); // Log the full stack trace for debugging
+            logger.error("Error processing file upload for '{}': {}", originalFilename, e.getMessage(), e);
             response.put("success", false);
             response.put("code", -3);
             response.put("message", "Failed to upload or process file '" + originalFilename +
@@ -205,10 +203,7 @@ public class RequestController {
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (Exception e) {
             // Catch any other unexpected runtime exceptions
-            System.err.println(
-                "An unexpected error occurred during file upload for '" + originalFilename + "': " +
-                    e.getMessage());
-            e.printStackTrace();
+            logger.error("An unexpected error occurred during file upload for '{}': {}", originalFilename, e.getMessage(), e);
             response.put("success", false);
             response.put("code", -4);
             response.put("message", "An unexpected error occurred: " + e.getMessage());
