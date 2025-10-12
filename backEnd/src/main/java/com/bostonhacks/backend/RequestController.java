@@ -29,6 +29,7 @@ public class RequestController {
     private final StorageHandler storageHandler;
     private final OCRService ocrService;
     private final SensitiveInfoDetector sensitiveInfoDetector;
+    
     Logger logger = LoggerFactory.getLogger(RequestController.class);
 
     public RequestController(StorageHandler storageHandler, OCRService ocrService,
@@ -40,18 +41,20 @@ public class RequestController {
 
     private String analyzeTextWithGemini(String content) {
         String prompt =
-            "Please analyze this text and check for personally identifiable information (PII)";
+            "Please analyze this text and check for personally identifiable information (PII). " +
+            "Provide a clear, structured analysis with specific findings and recommendations.";
         Content[] contentArr =
             {Content.fromParts(Part.fromBytes(content.getBytes(), "text/markdown")),
                 Content.fromParts(Part.fromText(prompt))};
         var response = Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
             Arrays.asList(contentArr), null);
-        return response.toString();
+        return extractContentFromResponse(response);
     }
 
     private String analyzeImageWithGemini(Path filePath) throws IOException {
         String prompt =
-            "Please search this file and examine if there's any personally identifiable information.";
+            "Please analyze this image and examine if there's any personally identifiable information. " +
+            "Provide a clear, structured analysis with specific findings and recommendations.";
         byte[] imageBytes = Files.readAllBytes(filePath);
         Content[] contentArr = {Content.fromParts(Part.fromText(prompt)),
             Content.fromParts(Part.fromBytes(imageBytes, storageHandler.mimeType(filePath)))};
@@ -59,7 +62,59 @@ public class RequestController {
         GenerateContentResponse response =
             Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
                 Arrays.asList(contentArr), null);
-        return response.toString();
+        return extractContentFromResponse(response);
+    }
+
+    private String extractContentFromResponse(GenerateContentResponse response) {
+        if (response == null) {
+            return "No analysis available.";
+        }
+
+        try {
+            // Extract text content from the response by parsing the string representation
+            String responseStr = response.toString();
+
+            // Find the text content in the response string
+            // This is a simple approach to extract the actual content from the response
+            if (responseStr.contains("text=")) {
+                int startIndex = responseStr.indexOf("text=") + 5;
+                int endIndex = responseStr.indexOf("}", startIndex);
+                if (endIndex == -1) {
+                    endIndex = responseStr.length();
+                }
+                String content = responseStr.substring(startIndex, endIndex);
+                // Clean up the extracted content
+                content = content.replaceAll("^[\"']|[\"']$", ""); // Remove quotes
+                return content.trim();
+            }
+
+            return responseStr.trim();
+        } catch (Exception e) {
+            logger.warn("Error extracting content from response: {}", e.getMessage());
+            return response.toString();
+        }
+    }
+
+    private String analyzeContent(String content, String contentType) {
+        StringBuilder result = new StringBuilder();
+
+        // First check for sensitive information using our local detector
+        java.util.List<String> sensitiveItems = sensitiveInfoDetector.detectSensitiveInfo(content);
+
+        if (!sensitiveItems.isEmpty()) {
+            result.append("**SENSITIVE INFORMATION DETECTED**\n\n");
+            result.append("The following sensitive information was found in your ").append(contentType).append(":\n\n");
+            for (String item : sensitiveItems) {
+                result.append("- ").append(item).append("\n");
+            }
+            result.append("\n---\n\n");
+        }
+
+        // Then get AI analysis
+        String geminiAnalysis = analyzeTextWithGemini(content);
+        result.append("**AI Analysis**\n\n").append(geminiAnalysis);
+
+        return result.toString();
     }
 
 
@@ -81,24 +136,8 @@ public class RequestController {
     @GetMapping("/text-advice")
     public Map<String, Serializable> getTextAdvice(@RequestParam("text") String input) {
         try {
-            // First check for sensitive information using our local detector
-            java.util.List<String> sensitiveItems =
-                sensitiveInfoDetector.detectSensitiveInfo(input);
-            StringBuilder analysisResult = new StringBuilder();
-
-            if (!sensitiveItems.isEmpty()) {
-                analysisResult.append("SENSITIVE INFORMATION DETECTED:\n");
-                for (String item : sensitiveItems) {
-                    analysisResult.append("- ").append(item).append("\n");
-                }
-                analysisResult.append("\n");
-            }
-
-            // Then get AI analysis
-            String geminiAnalysis = analyzeTextWithGemini(input);
-            analysisResult.append("AI Analysis: ").append(geminiAnalysis);
-
-            return Map.of("code", 0, "message", analysisResult.toString());
+            String analysisResult = analyzeContent(input, "text input");
+            return Map.of("code", 0, "message", analysisResult);
         } catch (Exception e) {
             return Map.of("code", -1, "message", "Error: " + e.getMessage());
         }
@@ -121,50 +160,23 @@ public class RequestController {
 
             if (mimeType.contains("text")) {
                 String fileContent = Files.readString(filePath);
-
-                // Check for sensitive information in text files
-                java.util.List<String> sensitiveItems =
-                    sensitiveInfoDetector.detectSensitiveInfo(fileContent);
-                StringBuilder result = new StringBuilder();
-
-                if (!sensitiveItems.isEmpty()) {
-                    result.append("SENSITIVE INFORMATION DETECTED:\n");
-                    for (String item : sensitiveItems) {
-                        result.append("- ").append(item).append("\n");
-                    }
-                    result.append("\n");
-                }
-
-                String geminiAnalysis = analyzeTextWithGemini(fileContent);
-                result.append("AI Analysis: ").append(geminiAnalysis);
-                analysisResult = result.toString();
-
+                analysisResult = analyzeContent(fileContent, "text file");
                 logger.info("Analyzed text file: {}", filename);
             } else if (mimeType.contains("image")) {
                 // Use OCR to extract text from image, then analyze the text
-                String extractedText = ocrService.extractTextFromImage(filePath.toFile());
+                String extractedText = OCRService.extractTextFromImage(filePath.toFile());
                 if (extractedText != null && !extractedText.trim().isEmpty()) {
-                    // Check for sensitive information in OCR extracted text
-                    java.util.List<String> sensitiveItems =
-                        sensitiveInfoDetector.detectSensitiveInfo(extractedText);
-                    StringBuilder result = new StringBuilder();
-
-                    if (!sensitiveItems.isEmpty()) {
-                        result.append("SENSITIVE INFORMATION DETECTED IN IMAGE TEXT:\n");
-                        for (String item : sensitiveItems) {
-                            result.append("- ").append(item).append("\n");
-                        }
-                        result.append("\n");
-                    }
-
-                    String geminiAnalysis = analyzeTextWithGemini(extractedText);
-                    result.append("AI Analysis: ").append(geminiAnalysis);
-                    analysisResult = result.toString();
-
+                    analysisResult = analyzeContent(extractedText, "image text");
                     logger.info("Analyzed image file with OCR: {}", filename);
                 } else {
                     code = 1;
-                    analysisResult = analyzeImageWithGemini(filePath);
+                    StringBuilder result = new StringBuilder();
+                    result.append("**Image Analysis**\n\n");
+                    result.append("No readable text was found in the image using OCR. Analyzing image directly...\n\n");
+                    result.append("---\n\n");
+                    String directAnalysis = analyzeImageWithGemini(filePath);
+                    result.append("**AI Visual Analysis**\n\n").append(directAnalysis);
+                    analysisResult = result.toString();
                     logger.info("Analyzed image file directly: {}", filename);
                 }
             } else {
