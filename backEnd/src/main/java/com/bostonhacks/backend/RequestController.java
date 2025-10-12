@@ -181,10 +181,25 @@ public class RequestController {
     }
 
     @GetMapping("/image-advice")
-    public GenerateContentResponse getImageAdvice(@RequestParam("file") String filename) {
-        // fixme return str
-        return Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
-            "Please search this image and examine if there's any personally identifiable information.",
-            null);
+    public String getImageAdvice(@RequestParam("file") String filename) {
+        try {
+            Path filePath = storageHandler.fetchFile(filename);
+            if (filePath == null) {
+                return "Error: File not found - " + filename;
+            }
+
+            String prompt = "Please search this image and examine if there's any personally identifiable information.";
+            Content[] contentArr = {
+                Content.fromParts(Part.fromText(prompt))
+            };
+            GenerateContentResponse response = Gemini.getInstance().getGemini().models.generateContent(
+                "gemini-2.5-flash",
+                Arrays.asList(contentArr),
+                null
+            );
+            return response.toString();
+        } catch (Exception e) {
+            return "Error analyzing image: " + e.getMessage();
+        }
     }
 }

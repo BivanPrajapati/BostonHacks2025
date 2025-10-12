@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 @Service // Mark as a Spring service for dependency injection
 public class SensitiveInfoDetector {
+    private static SensitiveInfoDetector instance;
 
     // --- Define Regular Expression Patterns for Sensitive Data ---
     private static final Pattern EMAIL_PATTERN =
@@ -22,7 +23,7 @@ public class SensitiveInfoDetector {
         "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|6(?:011|5[0-9]{2})[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\\d{3})\\d{11})\\b");
 
     private static final Pattern PHONE_PATTERN =
-        Pattern.compile("\\b(?:\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4})\\b");
+        Pattern.compile("\\b\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}\\b");
 
     private static final Pattern SSN_PATTERN =
         Pattern.compile("\\b(?!000|666)[0-8][0-9]{2}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}\\b");
@@ -32,13 +33,32 @@ public class SensitiveInfoDetector {
 
     private final List<SensitivePattern> patterns;
 
-    public SensitiveInfoDetector() {
+    // Private constructor to prevent instantiation
+    private SensitiveInfoDetector() {
         patterns = new ArrayList<>();
         patterns.add(new SensitivePattern("Email Address", EMAIL_PATTERN));
         patterns.add(new SensitivePattern("Credit Card Number", CREDIT_CARD_PATTERN));
         patterns.add(new SensitivePattern("Phone Number", PHONE_PATTERN));
         patterns.add(new SensitivePattern("Social Security Number", SSN_PATTERN));
         patterns.add(new SensitivePattern("IP Address (IPv4)", IP_ADDRESS_PATTERN));
+    }
+
+    // Thread-safe singleton instance getter
+    public static synchronized SensitiveInfoDetector getInstance() {
+        if (instance == null) {
+            synchronized (SensitiveInfoDetector.class) {
+                if (instance == null) {
+                    instance = new SensitiveInfoDetector();
+                }
+            }
+        }
+        return instance;
+    }
+
+    // Prevent cloning
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        throw new CloneNotSupportedException("Cloning of singleton SensitiveInfoDetector is not allowed");
     }
 
     /**
