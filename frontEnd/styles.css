@@ -1,8 +1,8 @@
 *{
     margin: 0;
     box-sizing: border-box;
-    font-family: "Micro 5", sans-serif;
-    font-size: 20px;
+    font-family: "Press Start 2P", sans-serif;
+    font-size: 18px;
 }
 
 :root {
@@ -250,8 +250,9 @@ input[type="file"]::file-selector-button {
     display: none;
 }
 
-.micro-5-regular {
-  font-family: inherit;
+
+.press-start-2p-regular {
+  font-family: "Press Start 2P", system-ui;
   font-weight: 400;
   font-style: normal;
 }
