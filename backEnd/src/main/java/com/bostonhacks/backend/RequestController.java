@@ -69,7 +69,7 @@ public class RequestController {
     public String getTextAdvice(@RequestBody String input) {
         try {
             // Step 1: Save input string as a temporary .txt file
-            Path tempFile = storageHandler.storeFile(input, input.getBytes());
+            Path tempFile = StorageHandler.getInstance().fetchFile(input);
             Files.writeString(tempFile, input, StandardCharsets.UTF_8);
             System.out.println("File created: " + tempFile.toAbsolutePath());
 
