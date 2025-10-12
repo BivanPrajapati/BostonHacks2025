@@ -51,6 +51,15 @@ public class RequestController {
     }
 
     /**
+     * TESTING METHOD!!
+     * echos whatever you sent in
+     */
+    @GetMapping("/echo")
+    public String echo(@RequestParam("text") String text) {
+        return text;
+    }
+
+    /**
      * takes in raw text advice
      *
      * @param input raw text advice from the frontend chat interface
