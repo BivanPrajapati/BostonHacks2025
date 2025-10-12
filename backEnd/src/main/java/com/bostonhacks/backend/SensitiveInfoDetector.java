@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -13,8 +14,6 @@ import org.springframework.stereotype.Service;
 
 @Service // Mark as a Spring service for dependency injection
 public class SensitiveInfoDetector {
-    private static SensitiveInfoDetector instance;
-
     // --- Define Regular Expression Patterns for Sensitive Data ---
     private static final Pattern EMAIL_PATTERN =
         Pattern.compile("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b");
@@ -31,35 +30,13 @@ public class SensitiveInfoDetector {
     private static final Pattern IP_ADDRESS_PATTERN = Pattern.compile(
         "\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b");
 
-    private final List<SensitivePattern> patterns;
-
-    // Private constructor to prevent instantiation
-    private SensitiveInfoDetector() {
-        patterns = new ArrayList<>();
-        patterns.add(new SensitivePattern("Email Address", EMAIL_PATTERN));
-        patterns.add(new SensitivePattern("Credit Card Number", CREDIT_CARD_PATTERN));
-        patterns.add(new SensitivePattern("Phone Number", PHONE_PATTERN));
-        patterns.add(new SensitivePattern("Social Security Number", SSN_PATTERN));
-        patterns.add(new SensitivePattern("IP Address (IPv4)", IP_ADDRESS_PATTERN));
-    }
-
-    // Thread-safe singleton instance getter
-    public static synchronized SensitiveInfoDetector getInstance() {
-        if (instance == null) {
-            synchronized (SensitiveInfoDetector.class) {
-                if (instance == null) {
-                    instance = new SensitiveInfoDetector();
-                }
-            }
-        }
-        return instance;
-    }
-
-    // Prevent cloning
-    @Override
-    protected Object clone() throws CloneNotSupportedException {
-        throw new CloneNotSupportedException("Cloning of singleton SensitiveInfoDetector is not allowed");
-    }
+    private static final List<SensitivePattern> patterns = Arrays.asList(
+        new SensitivePattern("Email Address", EMAIL_PATTERN),
+        new SensitivePattern("Credit Card Number", CREDIT_CARD_PATTERN),
+        new SensitivePattern("Phone Number", PHONE_PATTERN),
+        new SensitivePattern("Social Security Number", SSN_PATTERN),
+        new SensitivePattern("IP Address (IPv4)", IP_ADDRESS_PATTERN)
+    );
 
     /**
      * Scans the content of a text file for predefined sensitive information patterns.
@@ -90,6 +67,29 @@ public class SensitiveInfoDetector {
                             "Line " + lineNumber + ": " + sensitivePattern.name + " detected -> '" +
                                 foundData + "'");
                     }
+                }
+            }
+        }
+        return detectedItems;
+    }
+
+    public List<String> detectSensitiveInfo(String text) {
+        List<String> detectedItems = new ArrayList<>();
+        if (text == null || text.trim().isEmpty()) {
+            return detectedItems;
+        }
+
+        String[] lines = text.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            int lineNumber = i + 1;
+            for (SensitivePattern sensitivePattern : patterns) {
+                Matcher matcher = sensitivePattern.pattern.matcher(line);
+                while (matcher.find()) {
+                    String foundData = matcher.group();
+                    detectedItems.add(
+                        "Line " + lineNumber + ": " + sensitivePattern.name + " detected -> '" +
+                            foundData + "'");
                 }
             }
         }
