@@ -85,18 +85,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(errorText);
             return;
         }
-        const result = await uploadResponse.json(); // Assuming your backend returns JSON
+        let result;
+        try {
+            result = await uploadResponse.json();
+        } catch (jsonError) {
+            console.error('Error parsing upload response JSON:', jsonError);
+            statusMessage.textContent = 'Upload failed: Invalid response format.';
+            return;
+        }
         statusMessage.textContent = `Upload successful!`;
         fileUploadForm.reset(); // Clear the form
 
         let adviceResponse;
         try {
-            adviceResponse = await fetch(URLfy('/file-advice'), {
+            adviceResponse = await fetch(URLfy(`/file-advice?filename=${encodeURIComponent(result.filename)}`), {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({filename: result.filename})
+                }
             });
         } catch (error) {
             console.error('Network error:', error);
@@ -111,7 +117,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const adviceResult = await adviceResponse.json();
+        let adviceResult;
+        try {
+            adviceResult = await adviceResponse.json();
+        } catch (jsonError) {
+            console.error('Error parsing advice response JSON:', jsonError);
+            statusMessage.textContent = 'Error: Invalid response format from advice service.';
+            return;
+        }
         responsePanel.textContent = adviceResult.message;
     });
 
@@ -128,16 +141,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // **Replace with your backend URL for text submission**
-            const response = await fetch(URLfy('/text-advice'), {
+            const response = await fetch(URLfy(`/text-advice?text=${encodeURIComponent(text)}`), {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ text: text }) 
+                }
             });
 
             if (response.ok) {
-                const result = await response.json();
+                let result;
+                try {
+                    result = await response.json();
+                } catch (jsonError) {
+                    console.error('Error parsing text response JSON:', jsonError);
+                    textStatusMessage.textContent = 'Submission failed: Invalid response format.';
+                    return;
+                }
                 textStatusMessage.textContent = 'Submission successful!';
                 responsePanel.textContent = result.message;
                 textUploadForm.reset();

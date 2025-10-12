@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-
 import net.sourceforge.tess4j.TesseractException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,7 +31,8 @@ public class RequestController {
     private final SensitiveInfoDetector sensitiveInfoDetector;
     Logger logger = LoggerFactory.getLogger(RequestController.class);
 
-    public RequestController(StorageHandler storageHandler, OCRService ocrService, SensitiveInfoDetector sensitiveInfoDetector) {
+    public RequestController(StorageHandler storageHandler, OCRService ocrService,
+                             SensitiveInfoDetector sensitiveInfoDetector) {
         this.storageHandler = storageHandler;
         this.ocrService = ocrService;
         this.sensitiveInfoDetector = sensitiveInfoDetector;
@@ -54,10 +53,8 @@ public class RequestController {
         String prompt =
             "Please search this file and examine if there's any personally identifiable information.";
         byte[] imageBytes = Files.readAllBytes(filePath);
-        Content[] contentArr = {
-            Content.fromParts(Part.fromText(prompt)),
-            Content.fromParts(Part.fromBytes(imageBytes, storageHandler.mimeType(filePath)))
-        };
+        Content[] contentArr = {Content.fromParts(Part.fromText(prompt)),
+            Content.fromParts(Part.fromBytes(imageBytes, storageHandler.mimeType(filePath)))};
 
         GenerateContentResponse response =
             Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
@@ -85,7 +82,8 @@ public class RequestController {
     public Map<String, Serializable> getTextAdvice(@RequestParam("text") String input) {
         try {
             // First check for sensitive information using our local detector
-            java.util.List<String> sensitiveItems = sensitiveInfoDetector.detectSensitiveInfo(input);
+            java.util.List<String> sensitiveItems =
+                sensitiveInfoDetector.detectSensitiveInfo(input);
             StringBuilder analysisResult = new StringBuilder();
 
             if (!sensitiveItems.isEmpty()) {
@@ -125,7 +123,8 @@ public class RequestController {
                 String fileContent = Files.readString(filePath);
 
                 // Check for sensitive information in text files
-                java.util.List<String> sensitiveItems = sensitiveInfoDetector.detectSensitiveInfo(fileContent);
+                java.util.List<String> sensitiveItems =
+                    sensitiveInfoDetector.detectSensitiveInfo(fileContent);
                 StringBuilder result = new StringBuilder();
 
                 if (!sensitiveItems.isEmpty()) {
@@ -146,7 +145,8 @@ public class RequestController {
                 String extractedText = ocrService.extractTextFromImage(filePath.toFile());
                 if (extractedText != null && !extractedText.trim().isEmpty()) {
                     // Check for sensitive information in OCR extracted text
-                    java.util.List<String> sensitiveItems = sensitiveInfoDetector.detectSensitiveInfo(extractedText);
+                    java.util.List<String> sensitiveItems =
+                        sensitiveInfoDetector.detectSensitiveInfo(extractedText);
                     StringBuilder result = new StringBuilder();
 
                     if (!sensitiveItems.isEmpty()) {
@@ -174,8 +174,7 @@ public class RequestController {
                     HttpStatus.BAD_REQUEST);
             }
 
-            return new ResponseEntity<>(
-                Map.of("code", code, "message", analysisResult),
+            return new ResponseEntity<>(Map.of("code", code, "message", analysisResult),
                 HttpStatus.OK);
 
         } catch (IOException e) {
@@ -214,8 +213,8 @@ public class RequestController {
     }
      */
     @PostMapping("/upload-file")
-    public ResponseEntity<Map<String, Object>> uploadFile(@RequestParam("file")
-    MultipartFile file) {
+    public ResponseEntity<Map<String, Object>> uploadFile(
+        @RequestParam("file") MultipartFile file) {
         Map<String, Object> response = new HashMap<>();
         if (file.isEmpty()) {
             response.put("success", false);
@@ -225,7 +224,7 @@ public class RequestController {
         }
 
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".txt")) {
+        if (originalFilename == null) {
             response.put("success", false);
             response.put("code", -2);
             response.put("message", "Invalid file name.");
@@ -246,7 +245,8 @@ public class RequestController {
 
         } catch (IOException e) {
             // Handle file I/O errors during storage or reading
-            logger.error("Error processing file upload for '{}': {}", originalFilename, e.getMessage(), e);
+            logger.error("Error processing file upload for '{}': {}", originalFilename,
+                e.getMessage(), e);
             response.put("success", false);
             response.put("code", -3);
             response.put("message", "Failed to upload or process file '" + originalFilename +
@@ -254,7 +254,8 @@ public class RequestController {
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (Exception e) {
             // Catch any other unexpected runtime exceptions
-            logger.error("An unexpected error occurred during file upload for '{}': {}", originalFilename, e.getMessage(), e);
+            logger.error("An unexpected error occurred during file upload for '{}': {}",
+                originalFilename, e.getMessage(), e);
             response.put("success", false);
             response.put("code", -4);
             response.put("message", "An unexpected error occurred: " + e.getMessage());
