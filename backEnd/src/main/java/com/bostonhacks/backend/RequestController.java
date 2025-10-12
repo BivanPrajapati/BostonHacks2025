@@ -1,18 +1,26 @@
 package com.bostonhacks.backend;
 
+import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentResponse;
+import com.google.genai.types.Part;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 
 @RestController
@@ -20,9 +28,26 @@ public class RequestController {
     private final StorageHandler storageHandler;
     private final SensitiveInfoDetector sensitiveInfoDetector;
 
-    public RequestController(StorageHandler storageHandler, SensitiveInfoDetector sensitiveInfoDetector) {
+    public RequestController(StorageHandler storageHandler,
+                             SensitiveInfoDetector sensitiveInfoDetector) {
         this.storageHandler = storageHandler;
         this.sensitiveInfoDetector = sensitiveInfoDetector;
+    }
+
+    private String analyzeTextWithGemini(String content) {
+        try {
+            String prompt =
+                "Please analyze this text and check for personally identifiable information (PII)";
+            Content[] contentArr =
+                {Content.fromParts(Part.fromBytes(content.getBytes(), "text/markdown")),
+                    Content.fromParts(Part.fromText(prompt))};
+            var response =
+                Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
+                    Arrays.asList(contentArr), null);
+            return response.toString();
+        } catch (Exception e) {
+            return "Error analyzing text: " + e.getMessage();
+        }
     }
 
     /**
@@ -32,18 +57,15 @@ public class RequestController {
      * @return text advice
      */
     @GetMapping("/text")
-    public String getText(@RequestBody String input) {
+    public String getTextAdvice(@RequestBody String input) {
         try {
             // Step 1: Save input string as a temporary .txt file
-            Path tempFile = Files.createTempFile("user-input-", ".txt");
+            Path tempFile = storageHandler.storeFile(input, input.getBytes());
             Files.writeString(tempFile, input, StandardCharsets.UTF_8);
-            System.out.println("📄 File created: " + tempFile.toAbsolutePath());
+            System.out.println("File created: " + tempFile.toAbsolutePath());
 
-            // Step 2: Call Gemini to analyze the text file
-            String advice = getTextAdvice(tempFile.toString());
-
-            // Step 3: Return Gemini’s text output
-            return advice;
+            // Step 2: Analyze the text directly
+            return analyzeTextWithGemini(input);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -58,18 +80,25 @@ public class RequestController {
      * @return text advice
      */
     @GetMapping("/text-advice")
-    public String getTextAdvice(@RequestParam("file") String filename) {
-        // fixme return str
-        return Gemini.getInstance().getGemini().models.generateContent(
-            "gemini-2.5-flash",
-            "Please search this text file and examine if there's any personally identifiable information.",
-            null
-        ).toString();
+    public String getTextFile(@RequestParam("file") String filename) {
+        try {
+            // 1. Read the file contents as text
+            Path filePath = Paths.get("uploads", filename);
+            String fileContent = Files.readString(filePath);
+
+            // 2. Analyze the file content
+            return analyzeTextWithGemini(fileContent);
+
+        } catch (IOException e) {
+            return "Error reading file: " + e.getMessage();
+        }
     }
 
     @PostMapping("/upload-file")
     public ResponseEntity<Map<String, Object>> uploadFile(
-        @RequestParam("file") MultipartFile file) {
+        Model model,
+        @RequestParam("file") MultipartFile file
+    ) {
         Map<String, Object> response = new HashMap<>();
         if (file.isEmpty()) {
             response.put("success", false);
@@ -157,13 +186,6 @@ public class RequestController {
             response.put("message", "An unexpected error occurred: " + e.getMessage());
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-
-
-    @PostMapping("/upload-image")
-    public String uploadImage(@RequestParam("file") MultipartFile file,
-                              RedirectAttributes redirectAttributes) {
-        return "";
     }
 
     @GetMapping("/image-advice")

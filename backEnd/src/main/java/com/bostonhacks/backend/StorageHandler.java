@@ -32,10 +32,6 @@ public class StorageHandler {
         return instance;
     }
 
-    public Path getStorageDirectory() {
-        return storageDirectory;
-    }
-
     /**
      * Stores the uploaded file to the designated upload directory.
      * Generates a unique filename to prevent overwrites.
