@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // **Replace with your backend URL for text submission**
             const response = await fetch(URLfy('/text-advice'), {
-                method: 'POST',
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                 },

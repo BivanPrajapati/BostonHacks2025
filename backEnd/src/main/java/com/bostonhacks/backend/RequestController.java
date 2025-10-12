@@ -82,7 +82,7 @@ public class RequestController {
      * @return text advice
      */
     @GetMapping("/text-advice")
-    public Map<String, Serializable> getTextAdvice(@RequestBody String input) {
+    public Map<String, Serializable> getTextAdvice(@RequestParam("text") String input) {
         try {
             // First check for sensitive information using our local detector
             java.util.List<String> sensitiveItems = sensitiveInfoDetector.detectSensitiveInfo(input);
