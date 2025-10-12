@@ -1,21 +1,25 @@
 package com.bostonhacks.backend;
 
+import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentResponse;
-
-import java.io.File;
+import com.google.genai.types.Part;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 
 @RestController
@@ -23,9 +27,26 @@ public class RequestController {
     private final StorageHandler storageHandler;
     private final SensitiveInfoDetector sensitiveInfoDetector;
 
-    public RequestController(StorageHandler storageHandler, SensitiveInfoDetector sensitiveInfoDetector) {
+    public RequestController(StorageHandler storageHandler,
+                             SensitiveInfoDetector sensitiveInfoDetector) {
         this.storageHandler = storageHandler;
         this.sensitiveInfoDetector = sensitiveInfoDetector;
+    }
+
+    private String analyzeTextWithGemini(String content) {
+        try {
+            String prompt =
+                "Please analyze this text and check for personally identifiable information (PII)";
+            Content[] contentArr =
+                {Content.fromParts(Part.fromBytes(content.getBytes(), "text/markdown")),
+                    Content.fromParts(Part.fromText(prompt))};
+            var response =
+                Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
+                    Arrays.asList(contentArr), null);
+            return response.toString();
+        } catch (Exception e) {
+            return "Error analyzing text: " + e.getMessage();
+        }
     }
 
     /**
@@ -42,11 +63,8 @@ public class RequestController {
             Files.writeString(tempFile, input, StandardCharsets.UTF_8);
             System.out.println("File created: " + tempFile.toAbsolutePath());
 
-            // Step 2: Call Gemini to analyze the text file
-            String advice = getTextAdvice(tempFile.toString());
-
-            // Step 3: Return Gemini’s text output
-            return advice;
+            // Step 2: Analyze the text directly
+            return analyzeTextWithGemini(input);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -64,20 +82,11 @@ public class RequestController {
     public String getTextAdvice(@RequestParam("file") String filename) {
         try {
             // 1. Read the file contents as text
-            Path filePath = Paths.get("uploads", filename); // adjust your path if needed
+            Path filePath = Paths.get("uploads", filename);
             String fileContent = Files.readString(filePath);
 
-            // 2. Call Gemini API with the file content
-            String prompt = "Please analyze this text and check for personally identifiable information (PII):\n\n" + fileContent;
-
-            var response = Gemini.getInstance().getGemini().models.generateContent(
-                    "gemini-2.5-flash",
-                    prompt,
-                    null
-            );
-
-            // 3. Return Gemini’s answer
-            return response.toString();
+            // 2. Analyze the file content
+            return analyzeTextWithGemini(fileContent);
 
         } catch (IOException e) {
             return "Error reading file: " + e.getMessage();
@@ -176,13 +185,6 @@ public class RequestController {
         }
     }
 
-
-    @PostMapping("/upload-image")
-    public String uploadImage(@RequestParam("file") MultipartFile file,
-                              RedirectAttributes redirectAttributes) {
-        return "";
-    }
-
     @GetMapping("/image-advice")
     public GenerateContentResponse getImageAdvice(@RequestParam("file") String filename) {
         // fixme return str
@@ -190,4 +192,4 @@ public class RequestController {
             "Please search this image and examine if there's any personally identifiable information.",
             null);
     }
-    }
+}
