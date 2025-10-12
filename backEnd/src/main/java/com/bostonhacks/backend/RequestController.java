@@ -91,7 +91,7 @@ public class RequestController {
      * @return text advice
      */
     @GetMapping("/textfile-advice")
-    public String getTextFile(@RequestParam("file") String filename) {
+    public String getTextFile(@RequestParam("filename") String filename) {
         try {
             // 1. Read the file contents as text
             Path filePath = Paths.get("uploads", filename);
@@ -180,7 +180,7 @@ public class RequestController {
     }
 
     @GetMapping("/image-advice")
-    public String getImageAdvice(@RequestParam("file") String filename) {
+    public String getImageAdvice(@RequestParam("filename") String filename) {
         try {
             Path filePath = storageHandler.fetchFile(filename);
             if (filePath == null) {
