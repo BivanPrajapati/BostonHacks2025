@@ -65,7 +65,7 @@ public class RequestController {
      * @param input raw text advice from the frontend chat interface
      * @return text advice
      */
-    @GetMapping("/text")
+    @GetMapping("/text-advice")
     public String getTextAdvice(@RequestBody String input) {
         try {
             // Step 1: Save input string as a temporary .txt file
@@ -88,7 +88,7 @@ public class RequestController {
      * @param filename raw text advice from the frontend chat interface
      * @return text advice
      */
-    @GetMapping("/text-advice")
+    @GetMapping("/textfile-advice")
     public String getTextFile(@RequestParam("file") String filename) {
         try {
             // 1. Read the file contents as text
