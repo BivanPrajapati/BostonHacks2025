@@ -45,6 +45,22 @@ public class RequestController {
         return response.toString();
     }
 
+    private String analyzeImageWithGemini(Path filePath) throws IOException {
+        String prompt =
+            "Please search this file and examine if there's any personally identifiable information.";
+        byte[] imageBytes = Files.readAllBytes(filePath);
+        Content[] contentArr = {
+            Content.fromParts(Part.fromText(prompt)),
+            Content.fromParts(Part.fromBytes(imageBytes, storageHandler.mimeType(filePath)))
+        };
+
+        GenerateContentResponse response =
+            Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
+                Arrays.asList(contentArr), null);
+        return response.toString();
+    }
+
+
     /**
      * TESTING METHOD!!
      * echos whatever you sent in
@@ -70,51 +86,54 @@ public class RequestController {
     }
 
     /**
-     * takes in a TEXTUAL file (*.txt, *.md) from the frontend interface
+     * Unified endpoint that handles both text files and images for PII analysis
      *
-     * @param filename raw text advice from the frontend chat interface
-     * @return text advice
+     * @param filename file name from the frontend interface
+     * @return analysis advice based on file type
      */
-    @GetMapping("/textfile-advice")
-    public ResponseEntity<Map<String, Serializable>> getTextFile(
+    @GetMapping("/file-advice")
+    public ResponseEntity<Map<String, Serializable>> getFileAdvice(
         @RequestParam("filename") String filename) {
-        try {
-            Path file = storageHandler.fetchFile(filename);
-            if (!storageHandler.mimeType(file).contains("text")) {
-                logger.error("File is not a text file: {}", filename);
-                return new ResponseEntity<>(
-                    Map.of("code", -1, "message", "Error: File is not a text file."),
-                    HttpStatus.BAD_REQUEST);
-            }
-
-            String fileContent = Files.readString(file);
-
-            return new ResponseEntity<>(
-                Map.of("code", 0, "message", analyzeTextWithGemini(fileContent)), HttpStatus.OK);
-        } catch (IOException e) {
-            logger.error("Error fetching file: {}", filename, e);
-            return new ResponseEntity<>(Map.of("code", -1, "message", "Error: File not found."),
-                HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    @GetMapping("/image-advice")
-    public String getImageAdvice(@RequestParam("filename") String filename) {
         try {
             Path filePath = storageHandler.fetchFile(filename);
             if (filePath == null) {
-                return "Error: File not found - " + filename;
+                logger.error("File not found: {}", filename);
+                return new ResponseEntity<>(
+                    Map.of("code", -1, "message", "Error: File not found - " + filename),
+                    HttpStatus.BAD_REQUEST);
             }
 
-            String prompt =
-                "Please search this image and examine if there's any personally identifiable information.";
-            Content[] contentArr = {Content.fromParts(Part.fromText(prompt))};
-            GenerateContentResponse response =
-                Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
-                    Arrays.asList(contentArr), null);
-            return response.toString();
+            String mimeType = storageHandler.mimeType(filePath);
+            String analysisResult;
+
+            if (mimeType.contains("text")) {
+                String fileContent = Files.readString(filePath);
+                analysisResult = analyzeTextWithGemini(fileContent);
+                logger.info("Analyzed text file: {}", filename);
+            } else if (mimeType.contains("image")) {
+                analysisResult = analyzeImageWithGemini(filePath);
+                logger.info("Analyzed image file: {}", filename);
+            } else {
+                logger.error("Unsupported file type: {} for file: {}", mimeType, filename);
+                return new ResponseEntity<>(
+                    Map.of("code", -1, "message", "Error: Unsupported file type - " + mimeType),
+                    HttpStatus.BAD_REQUEST);
+            }
+
+            return new ResponseEntity<>(
+                Map.of("code", 0, "message", analysisResult),
+                HttpStatus.OK);
+
+        } catch (IOException e) {
+            logger.error("Error reading file: {}", filename, e);
+            return new ResponseEntity<>(
+                Map.of("code", -1, "message", "Error: Unable to read file - " + e.getMessage()),
+                HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
-            return "Error analyzing image: " + e.getMessage();
+            logger.error("Error analyzing file: {}", filename, e);
+            return new ResponseEntity<>(
+                Map.of("code", -1, "message", "Error analyzing file: " + e.getMessage()),
+                HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
