@@ -14,10 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class StorageHandler {
 
-    private static StorageHandler instance;
     private final Path storageDirectory;
 
-    private StorageHandler() throws IOException {
+    public StorageHandler() throws IOException {
         String tmpDir = System.getProperty("java.io.tmpdir");
         this.storageDirectory =
             Paths.get(tmpDir, "bostonhacks-uploads").toAbsolutePath().normalize();
@@ -25,13 +24,6 @@ public class StorageHandler {
             Files.createDirectories(storageDirectory);
             System.out.println("Upload directory created: " + this.storageDirectory);
         }
-    }
-
-    public static synchronized StorageHandler getInstance() throws IOException {
-        if (instance == null) {
-            instance = new StorageHandler();
-        }
-        return instance;
     }
 
     /**

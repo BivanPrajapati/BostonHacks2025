@@ -1,15 +1,15 @@
 package com.bostonhacks.backend;
 
-import com.google.genai.types.Content;
-import com.google.genai.types.GenerateContentResponse;
-import com.google.genai.types.Part;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -21,33 +21,42 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.genai.types.Content;
+import com.google.genai.types.GenerateContentResponse;
+import com.google.genai.types.Part;
 
-@CrossOrigin(origins = "*")
+
+@CrossOrigin(origins = "${cors.allowed-origins}")
 @RestController
 public class RequestController {
     private final StorageHandler storageHandler;
     private final SensitiveInfoDetector sensitiveInfoDetector;
+    private final Gemini gemini;
     private final String TEXT_PROMPT =
         "Please analyze the following for any personally identifiable information (PII) " +
             "such as names, addresses, phone numbers, email addresses, social security numbers, " +
             "credit card numbers, IP addresses, and other potentially sensitive data. " +
-            "Provide a clear, structured analysis highlighting any findings. " +
-            "Keep the response concise and focused solely on identifying sensitive information. " +
-            "Do NOT provide any additional commentary or suggestions beyond the identification of PII. " +
-            "If no sensitive information is found, simply state 'No sensitive information detected.' " +
-            "Respond in plaintext format, without markdown formatting.";
+            "Provide your response as a JSON array of improvements/findings. " +
+            "Each item in the array should be a brief description of the sensitive information found. " +
+            "Format: [\"finding1\", \"finding2\", \"finding3\"] " +
+            "If no sensitive information is found, return an empty array: [] " +
+            "ONLY return the JSON array, no other text or explanation.";
 
     Logger logger = LoggerFactory.getLogger(RequestController.class);
 
     public RequestController(StorageHandler storageHandler,
-                             SensitiveInfoDetector sensitiveInfoDetector) {
+                             SensitiveInfoDetector sensitiveInfoDetector,
+                             Gemini gemini) {
         this.storageHandler = storageHandler;
         this.sensitiveInfoDetector = sensitiveInfoDetector;
+        this.gemini = gemini;
     }
 
     private String analyzeWithGemini(Content data) {
         Content[] contentArr = {data, Content.fromParts(Part.fromText(TEXT_PROMPT))};
-        var response = Gemini.getInstance().getGemini().models.generateContent("gemini-2.5-flash",
+        var response = gemini.getGemini().models.generateContent("gemini-2.5-flash",
             Arrays.asList(contentArr), null);
         return extractContentFromResponse(response);
     }
@@ -103,37 +112,85 @@ public class RequestController {
         }
     }
 
+    /**
+     * Parses the Gemini response to extract a list of improvements/findings
+     * Expects a JSON array format from Gemini
+     */
+    private List<String> parseGeminiResponse(String geminiResponse) {
+        List<String> improvements = new ArrayList<>();
+        
+        try {
+            // Clean up the response - remove markdown code blocks if present
+            String cleanResponse = geminiResponse.trim();
+            if (cleanResponse.startsWith("```json")) {
+                cleanResponse = cleanResponse.substring(7);
+            }
+            if (cleanResponse.startsWith("```")) {
+                cleanResponse = cleanResponse.substring(3);
+            }
+            if (cleanResponse.endsWith("```")) {
+                cleanResponse = cleanResponse.substring(0, cleanResponse.length() - 3);
+            }
+            cleanResponse = cleanResponse.trim();
+            
+            // Parse the JSON array
+            ObjectMapper mapper = new ObjectMapper();
+            improvements = mapper.readValue(cleanResponse, new TypeReference<List<String>>() {});
+            
+            logger.info("Successfully parsed {} improvements from Gemini response", improvements.size());
+        } catch (Exception e) {
+            logger.warn("Error parsing Gemini response as JSON: {}. Attempting fallback parsing.", e.getMessage());
+            
+            // Fallback: try to extract improvements from text format
+            String[] lines = geminiResponse.split("\n");
+            for (String line : lines) {
+                line = line.trim();
+                // Look for lines that start with bullets or numbers
+                if (line.matches("^[•\\-*]\\s+.*") || line.matches("^\\d+\\.\\s+.*")) {
+                    String improvement = line.replaceFirst("^[•\\-*\\d.]+\\s+", "").trim();
+                    if (!improvement.isEmpty()) {
+                        improvements.add(improvement);
+                    }
+                }
+            }
+            
+            // If still empty, return the raw response as a single item
+            if (improvements.isEmpty() && !geminiResponse.trim().isEmpty()) {
+                improvements.add(geminiResponse.trim());
+            }
+        }
+        
+        return improvements;
+    }
+
     private String analyzeContent(String content, String contentType) {
         StringBuilder result = new StringBuilder();
 
         // First check for sensitive information using our local detector
         java.util.List<String> sensitiveItems = sensitiveInfoDetector.detectSensitiveInfo(content);
 
-        if (!sensitiveItems.isEmpty()) {
+        // Then get AI analysis
+        String geminiAnalysis = analyzeTextWithGemini(content);
+        List<String> geminiFindings = parseGeminiResponse(geminiAnalysis);
+
+        // Combine both findings into a single list
+        List<String> allFindings = new ArrayList<>();
+        allFindings.addAll(sensitiveItems);
+        allFindings.addAll(geminiFindings);
+
+        if (!allFindings.isEmpty()) {
             result.append("**SENSITIVE INFORMATION DETECTED**\n\n");
             result.append("The following sensitive information was found in your ")
                 .append(contentType).append(":\n\n");
-            for (String item : sensitiveItems) {
+            for (String item : allFindings) {
                 result.append("- ").append(item).append("\n");
             }
-            result.append("\n---\n\n");
+        } else {
+            result.append("**No sensitive information detected**\n\n");
+            result.append("Your ").append(contentType).append(" appears to be clear of personally identifiable information.");
         }
 
-        // Then get AI analysis
-        String geminiAnalysis = analyzeTextWithGemini(content);
-        result.append("**AI Analysis**\n\n").append(geminiAnalysis);
-
         return result.toString();
-    }
-
-
-    /**
-     * TESTING METHOD!!
-     * echos whatever you sent in
-     */
-    @GetMapping("/echo")
-    public String echo(@RequestParam("text") String text) {
-        return text;
     }
 
     /**
@@ -179,13 +236,21 @@ public class RequestController {
                     logger.info("Analyzed image file with OCR: {}", filename);
                 } else {
                     code = 1;
-                    StringBuilder result = new StringBuilder();
-                    result.append("**Image Analysis**\n\n");
-                    result.append(
-                        "No readable text was found in the image using OCR. Analyzing image directly...\n\n");
-                    result.append("---\n\n");
+                    // Analyze image directly with Gemini
                     String directAnalysis = analyzeImageWithGemini(filePath);
-                    result.append("**AI Visual Analysis**\n\n").append(directAnalysis);
+                    List<String> geminiFindings = parseGeminiResponse(directAnalysis);
+                    
+                    StringBuilder result = new StringBuilder();
+                    if (!geminiFindings.isEmpty()) {
+                        result.append("**SENSITIVE INFORMATION DETECTED IN IMAGE**\n\n");
+                        result.append("The following sensitive information was found in the image:\n\n");
+                        for (String item : geminiFindings) {
+                            result.append("- ").append(item).append("\n");
+                        }
+                    } else {
+                        result.append("**No sensitive information detected**\n\n");
+                        result.append("The image appears to be clear of personally identifiable information.");
+                    }
                     analysisResult = result.toString();
                     logger.info("Analyzed image file directly: {}", filename);
                 }

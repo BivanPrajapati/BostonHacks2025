@@ -20,13 +20,20 @@ import java.util.Map;
 
 @Service
 public class OCRService {
-    private static final String KEY = "K88376595988957";
     private static final Logger logger = LoggerFactory.getLogger(OCRService.class);
     private static final List<String> SUPPORTED_EXTENSIONS = Arrays.asList(".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif");
 
     public OCRService() {}
 
     public static String doOCR(File imageFile) {
+        String apiKey = System.getenv("OCR_API_KEY");
+        
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            logger.error("OCR_API_KEY environment variable is not set. Cannot perform OCR.");
+            throw new IllegalStateException("OCR_API_KEY environment variable is required but not set. " +
+                "Please set the OCR_API_KEY environment variable with your OCR.space API key.");
+        }
+
         try {
             byte[] bytes = new byte[(int) imageFile.length()];
             try (FileInputStream fis = new FileInputStream(imageFile)) {
@@ -39,7 +46,7 @@ public class OCRService {
             String url = "https://api.ocr.space/parse/image";
 
             HttpHeaders headers = new HttpHeaders();
-            headers.add("apikey", KEY);
+            headers.add("apikey", apiKey);
 
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("base64Image", "data:image/jpeg;base64," + base64Image);

@@ -1,4 +1,8 @@
-const URL = 'http://localhost:8000';
+// Backend URL configuration - change this based on environment
+// For production, set this to your production backend URL
+const URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : 'https://your-production-backend-url.com'; // Update this for production
 
 function URLfy(path) {
     return URL + path;
